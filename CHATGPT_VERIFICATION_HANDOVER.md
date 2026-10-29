@@ -36,7 +36,7 @@ Handover follows.
 | Fork | https://github.com/dhanushkumarsivaji/opentelemetry-js-contrib |
 | Feature branch | https://github.com/dhanushkumarsivaji/opentelemetry-js-contrib/tree/cursor/instrumentation-openai-genai-util-20f0 |
 | Diff vs fork `main` | https://github.com/dhanushkumarsivaji/opentelemetry-js-contrib/compare/main...cursor/instrumentation-openai-genai-util-20f0 |
-| Tip commit | https://github.com/dhanushkumarsivaji/opentelemetry-js-contrib/commit/a99b9211f066f3433fc41665fe43a3436b23f5da |
+| Tip commit | https://github.com/dhanushkumarsivaji/opentelemetry-js-contrib/commit/3146d04e9474fa75747d12a389456c9673287125 |
 | Tracking issue | https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3668 |
 | Do-not-duplicate PR | https://github.com/open-telemetry/opentelemetry-js-contrib/pull/3667 |
 | Related bug | https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3586 |
@@ -56,9 +56,10 @@ Handover follows.
 | --- | --- |
 | Branch | `cursor/instrumentation-openai-genai-util-20f0` |
 | Base (upstream main when built) | `d49c2fd5ac5a0758f9b1569e3f2ba7e8232ee912` |
-| Commit 1 | `b0526a420ddd0cbe10204f526030f184f65b1819` — `feat(genai-util): export public APIs for instrumentation consumers` |
-| Commit 2 | `a99b9211f066f3433fc41665fe43a3436b23f5da` — `feat(instrumentation-openai): adopt genai-util and donated GenAI gaps` |
-| Tip SHA on GitHub | `a99b9211f066f3433fc41665fe43a3436b23f5da` |
+| Commit 1 | `11a91acb` (rebased) — `feat(genai-util): export public APIs for instrumentation consumers` |
+| Commit 2 | `2bdbb107` — `feat(instrumentation-openai): adopt genai-util and donated GenAI gaps` |
+| Commit 3 | `3146d04e9474fa75747d12a389456c9673287125` — `fix(instrumentation-openai): address review privacy and attribution gaps` |
+| Tip SHA on GitHub | `3146d04e9474fa75747d12a389456c9673287125` |
 | Diffstat | 14 files, +469 / −38 |
 
 ### Clone locally
