@@ -5,6 +5,9 @@
 
 ### Features
 
+* **instrumentation-openai:** integrate `@opentelemetry/genai-util` `TelemetryHandler` lifecycle for chat, embeddings, and responses (streaming without depending on #3831 `wrapAsyncStream`) ([#3668](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3668))
+* **instrumentation-openai:** set `gen_ai.provider.name` to `openai` per OpenAI-specific semantic conventions ([#3668](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3668) / review feedback)
+
 * **instrumentation-openai:** adopt `@opentelemetry/genai-util` (`^0.4.0`) for shared error classification and GenAI constants ([#3668](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3668))
   * Depends on workspace / post-`0.4.0` expanded `genai-util` exports; release `genai-util` first or in the same release train.
 * **instrumentation-openai:** detect `gen_ai.provider.name` from OpenAI-compatible base URLs (including Azure) ([#3668](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3668))
