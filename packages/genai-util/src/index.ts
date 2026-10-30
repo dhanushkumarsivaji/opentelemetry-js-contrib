@@ -36,16 +36,37 @@ export type { EmbeddingInvocation } from './invocations/embedding';
 export type { ToolInvocation } from './invocations/tool';
 
 export type {
+  BlobPart,
+  ChatMessage,
+  CompactionPart,
   ContentCaptureMode,
   EmbeddingInvocationOptions,
+  FilePart,
+  FinishReason,
   GenAIInstrumentationConfig,
+  GenericPart,
   InferenceInvocationOptions,
   InferenceRequestOptions,
   InputMessages,
   InvocationError,
+  MessagePart,
+  Modality,
+  OutputMessage,
   OutputMessages,
+  ReasoningPart,
+  ResponseStatus,
+  Role,
+  SystemInstructionPart,
+  SystemInstructions,
+  TextPart,
+  TokenCountsByModality,
+  TokenModality,
+  TokenUsageByModality,
   TokenUsageDetails,
+  ToolCallRequestPart,
+  ToolCallResponsePart,
   ToolInvocationOptions,
+  UriPart,
 } from './types';
 
 export {
