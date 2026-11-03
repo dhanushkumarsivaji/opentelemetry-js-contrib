@@ -1,6 +1,6 @@
 # Lifecycle audit report — before updating PR #3872
 
-**Candidate tip:** `42ae7914fb1091761380829f4bbcb416b78fc169`  
+**Candidate tip:** `fcdb5ae4c063153df74c84d2be6e54bc390a1460`  
 **Branch:** `cursor/openai-lifecycle-main-ffe6`  
 **Base:** `upstream/main` including merged `#3831` (`b6d9900c`)  
 **PR #3872 tip (unchanged):** `8012ec1f7e426208415cb5a2474eab6fd1757cac`  
@@ -152,6 +152,7 @@ The `#3831` integration itself is implemented and tested on this branch.
 - **PR tip (unchanged):** `8012ec1f7e426208415cb5a2474eab6fd1757cac`  
 - **Prior audited tip:** `be0309516499b2a901224f7ca0c79cb54fda1ad2`  
 - **`#3831` on main:** `b6d9900ce36a226ff0c14d774294b147fe5ca00d`  
-- **Final candidate:** `42ae7914fb1091761380829f4bbcb416b78fc169`  
+- **Final candidate:** `fcdb5ae4c063153df74c84d2be6e54bc390a1460`
+- **Implementation commit (#3831 adoption):** `a3e38d547d77fb5192aaa4ef2908dd81a48362ed`  
 - **Intended PR-vs-main:** `git diff upstream/main...HEAD` (**no undici; no duplicated stream.ts**)  
 - **Intended tip-vs-tip:** `git diff 8012ec1f..HEAD` (includes main’s `#3831` / undici / etc.)
