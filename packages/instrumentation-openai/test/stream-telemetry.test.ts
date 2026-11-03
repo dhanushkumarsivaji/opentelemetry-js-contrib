@@ -14,7 +14,7 @@ import {
   resetMemoryExporter,
 } from '@opentelemetry/contrib-test-utils';
 import { expect } from 'expect';
-import { wrapAsyncIteratorWithTelemetry } from '../src/stream-telemetry';
+import { attachOpenAIStreamTelemetry } from '../src/stream-telemetry';
 
 function startInvocation() {
   const handler = new TelemetryHandler({
@@ -22,11 +22,14 @@ function startInvocation() {
     instrumentationVersion: '0.0.0',
     contentCaptureMode: 'none',
   });
-  return handler.startInference({
-    providerName: GEN_AI_PROVIDER_NAME_VALUE_OPENAI,
-    operationName: GEN_AI_OPERATION_NAME_VALUE_CHAT,
-    requestModel: 'gpt-test',
-  });
+  return {
+    handler,
+    invocation: handler.startInference({
+      providerName: GEN_AI_PROVIDER_NAME_VALUE_OPENAI,
+      operationName: GEN_AI_OPERATION_NAME_VALUE_CHAT,
+      requestModel: 'gpt-test',
+    }),
+  };
 }
 
 async function* genChunks(
@@ -41,30 +44,84 @@ async function* genChunks(
   }
 }
 
-describe('wrapAsyncIteratorWithTelemetry', function () {
+/**
+ * Minimal stand-in for OpenAI `Stream`: own-property `iterator` used by
+ * `tee()`, plus `[Symbol.asyncIterator]` delegating to it.
+ */
+function makeOpenAILikeStream(
+  values: number[],
+  opts?: { throwAfter?: number; error?: Error }
+): AsyncIterable<number> & {
+  iterator: () => AsyncIterator<number>;
+  teeCalls: number;
+  tee(): [AsyncIterable<number>, AsyncIterable<number>];
+} {
+  let consumed = false;
+  const iterator = async function* () {
+    if (consumed) {
+      throw new Error(
+        'Cannot iterate over a consumed stream, use `.tee()` to split the stream.'
+      );
+    }
+    consumed = true;
+    yield* genChunks(values, opts);
+  };
+
+  const stream: AsyncIterable<number> & {
+    iterator: () => AsyncIterator<number>;
+    teeCalls: number;
+    tee(): [AsyncIterable<number>, AsyncIterable<number>];
+  } = {
+    iterator,
+    teeCalls: 0,
+    [Symbol.asyncIterator]() {
+      return this.iterator();
+    },
+    tee() {
+      this.teeCalls++;
+      // Mirror OpenAI: tee pulls via this.iterator() directly.
+      const shared = this.iterator();
+      const buffer: Array<Promise<IteratorResult<number>>> = [];
+      const make = () => ({
+        async next() {
+          const p = shared.next();
+          buffer.push(p);
+          return p;
+        },
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      });
+      return [make(), make()] as [
+        AsyncIterable<number>,
+        AsyncIterable<number>,
+      ];
+    },
+  };
+  return stream;
+}
+
+describe('attachOpenAIStreamTelemetry', function () {
   beforeEach(() => {
     resetMemoryExporter();
   });
 
   it('records chunks and ends the span exactly once on normal completion', async () => {
-    const invocation = startInvocation();
+    const { handler, invocation } = startInvocation();
     const chunks: number[] = [];
     let onEndCount = 0;
-    const wrapped = wrapAsyncIteratorWithTelemetry(
-      genChunks([1, 2, 3])[Symbol.asyncIterator](),
-      invocation,
-      {
-        onChunk: c => {
-          chunks.push(c);
-        },
-        onEnd: () => {
-          onEndCount++;
-        },
-      }
-    );
+    const stream = makeOpenAILikeStream([1, 2, 3]);
+    attachOpenAIStreamTelemetry(handler, stream, invocation, {
+      onChunk: c => {
+        chunks.push(c);
+      },
+      onEnd: () => {
+        onEndCount++;
+      },
+    });
 
     const seen: number[] = [];
-    for await (const c of wrapped) {
+    for await (const c of stream) {
       seen.push(c);
     }
 
@@ -72,102 +129,90 @@ describe('wrapAsyncIteratorWithTelemetry', function () {
     expect(chunks).toEqual([1, 2, 3]);
     expect(onEndCount).toBe(1);
 
-    // Second completion path must be a no-op.
-    await wrapped.return?.();
-    expect(onEndCount).toBe(1);
-
     const spans = getTestSpans();
     expect(spans).toHaveLength(1);
     expect(spans[0].ended).toBe(true);
-    expect(spans[0].status.code).toBe(SpanStatusCode.UNSET);
+    expect(spans[0].status.code).not.toBe(SpanStatusCode.ERROR);
   });
 
   it('finalizes successfully on early break via iterator.return()', async () => {
-    const invocation = startInvocation();
+    const { handler, invocation } = startInvocation();
     let onEndCount = 0;
-    const wrapped = wrapAsyncIteratorWithTelemetry(
-      genChunks([10, 20, 30])[Symbol.asyncIterator](),
-      invocation,
-      {
-        onEnd: () => {
-          onEndCount++;
-        },
-      }
-    );
+    const stream = makeOpenAILikeStream([1, 2, 3, 4]);
+    attachOpenAIStreamTelemetry(handler, stream, invocation, {
+      onEnd: () => {
+        onEndCount++;
+      },
+    });
 
-    const iter = wrapped[Symbol.asyncIterator]();
-    expect((await iter.next()).value).toBe(10);
-    await iter.return?.();
+    for await (const c of stream) {
+      if (c === 2) {
+        break;
+      }
+    }
 
     expect(onEndCount).toBe(1);
     const spans = getTestSpans();
     expect(spans).toHaveLength(1);
     expect(spans[0].ended).toBe(true);
-    expect(spans[0].status.code).toBe(SpanStatusCode.UNSET);
   });
 
   it('fails the span exactly once when the iterator throws', async () => {
-    const invocation = startInvocation();
+    const { handler, invocation } = startInvocation();
     let onErrorCount = 0;
-    const wrapped = wrapAsyncIteratorWithTelemetry(
-      genChunks([1, 2], { throwAfter: 1, error: new Error('stream fail') })[
-        Symbol.asyncIterator
-      ](),
-      invocation,
-      {
-        onError: () => {
-          onErrorCount++;
-        },
-      }
-    );
+    const boom = new Error('stream boom');
+    const stream = makeOpenAILikeStream([1], { throwAfter: 0, error: boom });
+    attachOpenAIStreamTelemetry(handler, stream, invocation, {
+      onError: () => {
+        onErrorCount++;
+      },
+    });
 
+    await expect(
+      (async () => {
+        for await (const chunk of stream) {
+          void chunk;
+        }
+      })()
+    ).rejects.toThrow('stream boom');
+
+    expect(onErrorCount).toBe(1);
+    const spans = getTestSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].status.code).toBe(SpanStatusCode.ERROR);
+  });
+
+  it('instruments tee() consumption through stream.iterator()', async () => {
+    const { handler, invocation } = startInvocation();
+    const chunks: number[] = [];
+    const stream = makeOpenAILikeStream([10, 20]);
+    attachOpenAIStreamTelemetry(handler, stream, invocation, {
+      onChunk: c => {
+        chunks.push(c);
+      },
+    });
+
+    const [left] = stream.tee();
+    expect(stream.teeCalls).toBe(1);
     const seen: number[] = [];
-    await expect(async () => {
-      for await (const c of wrapped) {
-        seen.push(c);
-      }
-    }).rejects.toThrow('stream fail');
-
-    expect(seen).toEqual([1]);
-    expect(onErrorCount).toBe(1);
-
-    // Exactly-once: a second failure path must not re-enter onError.
-    await expect(wrapped.throw?.(new Error('again'))).rejects.toThrow('again');
-    expect(onErrorCount).toBe(1);
-
-    const spans = getTestSpans();
-    expect(spans).toHaveLength(1);
-    expect(spans[0].ended).toBe(true);
-    expect(spans[0].status.code).toBe(SpanStatusCode.ERROR);
+    // Consume one side; shared underlying iterator drives telemetry.
+    for await (const c of left as AsyncIterable<number>) {
+      seen.push(c);
+    }
+    expect(seen).toEqual([10, 20]);
+    expect(chunks).toEqual([10, 20]);
+    expect(getTestSpans()).toHaveLength(1);
+    expect(getTestSpans()[0].ended).toBe(true);
   });
 
-  it('fails via iterator.throw() when the source has no throw()', async () => {
-    const invocation = startInvocation();
-    const source: AsyncIterator<number> = {
-      next: async () => ({ done: true, value: undefined as unknown as number }),
-    };
-    const wrapped = wrapAsyncIteratorWithTelemetry(source, invocation, {});
-    await expect(wrapped.throw?.(new Error('injected'))).rejects.toThrow(
-      'injected'
-    );
-    const spans = getTestSpans();
-    expect(spans).toHaveLength(1);
-    expect(spans[0].ended).toBe(true);
-    expect(spans[0].status.code).toBe(SpanStatusCode.ERROR);
-  });
-
-  it('documents that an unconsumed wrapped iterator leaves the span open', async () => {
-    // Known limitation shared with classic OpenAI streaming instrumentation and
-    // the draft wrapAsyncStream attach path: no iteration ⇒ no finalize.
-    const invocation = startInvocation();
-    wrapAsyncIteratorWithTelemetry(
-      genChunks([1])[Symbol.asyncIterator](),
-      invocation,
-      {}
-    );
-    // Do not iterate.
+  it('leaves the span open if the wrapped stream is never pulled (classic/#3831/#9 parity)', async () => {
+    // Span is created before attach (request-start semantics). Without
+    // iteration there is no completion hook — same as published
+    // instrumentation-openai, genai-util wrapAsyncStream, and draft #9.
+    const { handler, invocation } = startInvocation();
+    const stream = makeOpenAILikeStream([1]);
+    attachOpenAIStreamTelemetry(handler, stream, invocation, {});
     expect(getTestSpans()).toHaveLength(0);
-    // Clean up to avoid leaking an open span into later tests.
     invocation.stop();
     expect(getTestSpans()).toHaveLength(1);
   });

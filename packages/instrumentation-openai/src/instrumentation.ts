@@ -28,6 +28,10 @@ import {
   InstrumentationBase,
   InstrumentationNodeModuleDefinition,
 } from '@opentelemetry/instrumentation';
+import {
+  ATTR_GEN_AI_SYSTEM,
+  GEN_AI_SYSTEM_VALUE_OPENAI,
+} from '@opentelemetry/semantic-conventions/incubating';
 import type {
   ChatCompletion,
   ChatCompletionChunk,
@@ -57,7 +61,7 @@ import {
   hasCompactionItems,
 } from './responses';
 import {
-  wrapAsyncIteratorWithTelemetry,
+  attachOpenAIStreamTelemetry,
   type StreamTelemetryHooks,
 } from './stream-telemetry';
 import type { OpenAIInstrumentationConfig } from './types';
@@ -75,6 +79,17 @@ import {
 } from './utils';
 /** @knipignore */
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version';
+
+/**
+ * Deprecated `gen_ai.system` retained on Chat Completions and Embeddings spans
+ * for compatibility with published instrumentation-openai / #3872 tip behavior.
+ * OpenAI-specific semconv requires `gen_ai.provider.name=openai` (set by
+ * TelemetryHandler). Responses spans historically did not set `gen_ai.system`
+ * the same way and stay on provider.name only.
+ */
+const DEPRECATED_GEN_AI_SYSTEM_ATTRS: Attributes = {
+  [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
+};
 
 export class OpenAIInstrumentation extends InstrumentationBase<OpenAIInstrumentationConfig> {
   private _telemetryHandler?: TelemetryHandler;
@@ -194,14 +209,10 @@ export class OpenAIInstrumentation extends InstrumentationBase<OpenAIInstrumenta
   }
 
   /**
-   * Attach streaming telemetry without depending on genai-util's
-   * `wrapAsyncStream` (#3831). Wraps OpenAI `Stream#iterator()` once so
-   * `.withResponse()` / `.asResponse()` / `.tee()` keep working, records
-   * per-chunk timing via `InferenceInvocation.recordStreamChunk()`, and
-   * completes the invocation exactly once on end or error.
-   *
-   * When #3831 lands, this helper can be swapped for
-   * `TelemetryHandler.wrapAsyncStream` without changing call-site hooks.
+   * Attach streaming telemetry via genai-util `TelemetryHandler.wrapAsyncStream`
+   * (#3831), with OpenAI `Stream.iterator` / `tee()` routing handled by
+   * {@link attachOpenAIStreamTelemetry}. Completes the invocation exactly once
+   * on end or error; preserves `.withResponse()` / stream object identity.
    */
   private _attachStreamTelemetry<TChunk>(
     apiPromise: APIPromise<Stream<TChunk>>,
@@ -210,63 +221,16 @@ export class OpenAIInstrumentation extends InstrumentationBase<OpenAIInstrumenta
   ): APIPromise<Stream<TChunk>> {
     void apiPromise.then(
       stream => {
-        interface StreamWithIterator {
-          iterator: (...args: unknown[]) => AsyncIterableIterator<TChunk>;
+        try {
+          attachOpenAIStreamTelemetry(
+            this._getTelemetryHandler(),
+            stream,
+            invocation,
+            createHooks()
+          );
+        } catch (err) {
+          this._diag.error('unexpected error attaching stream telemetry:', err);
         }
-        const maybeIterator = (stream as unknown as Partial<StreamWithIterator>)
-          .iterator;
-        if (typeof maybeIterator === 'function') {
-          const streamWithIterator = stream as unknown as StreamWithIterator;
-          const diagLogger = this._diag;
-          let consumed = false;
-          this._wrap(streamWithIterator, 'iterator', origIterator => {
-            return function wrappedIterator(
-              this: StreamWithIterator,
-              ...iterArgs: unknown[]
-            ) {
-              if (consumed) {
-                // Preserve OpenAI's consumed-stream error on double iteration;
-                // do not attach a second telemetry wrapper.
-                return origIterator.apply(this, iterArgs);
-              }
-              consumed = true;
-              const rawIterator = origIterator.apply(this, iterArgs);
-              return wrapAsyncIteratorWithTelemetry(
-                rawIterator,
-                invocation,
-                createHooks(),
-                diagLogger
-              );
-            };
-          });
-          return;
-        }
-
-        // Fallback: wrap Symbol.asyncIterator in-place (do not discard the
-        // wrapped iterable — a bug in an earlier draft).
-        const diagLogger = this._diag;
-        this._wrap(
-          stream as Stream<TChunk>,
-          Symbol.asyncIterator,
-          origAsyncIterator => {
-            let consumed = false;
-            return function wrappedAsyncIterator(
-              this: Stream<TChunk>
-            ): AsyncIterableIterator<TChunk> {
-              const rawIterator = origAsyncIterator.call(this);
-              if (consumed) {
-                return rawIterator;
-              }
-              consumed = true;
-              return wrapAsyncIteratorWithTelemetry(
-                rawIterator,
-                invocation,
-                createHooks(),
-                diagLogger
-              );
-            };
-          }
-        );
       },
       err => {
         this._failInvocation(invocation, err);
@@ -373,7 +337,7 @@ export class OpenAIInstrumentation extends InstrumentationBase<OpenAIInstrumenta
           ? params.stop
           : [params.stop];
 
-    const initialAttrs: Attributes = {};
+    const initialAttrs: Attributes = { ...DEPRECATED_GEN_AI_SYSTEM_ATTRS };
     const outputType = responseFormatToOutputType(params.response_format);
     if (outputType) {
       initialAttrs[ATTR_GEN_AI_OUTPUT_TYPE] = outputType;
@@ -510,6 +474,7 @@ export class OpenAIInstrumentation extends InstrumentationBase<OpenAIInstrumenta
       dimensionCount: params.dimensions ?? undefined,
       serverAddress,
       serverPort,
+      attributes: { ...DEPRECATED_GEN_AI_SYSTEM_ATTRS },
     });
   }
 

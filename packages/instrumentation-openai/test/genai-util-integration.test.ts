@@ -21,6 +21,7 @@ import {
   ATTR_GEN_AI_INPUT_MESSAGES,
   ATTR_GEN_AI_OUTPUT_MESSAGES,
   ATTR_GEN_AI_OUTPUT_TYPE,
+  ATTR_GEN_AI_PROVIDER_NAME,
   ATTR_GEN_AI_REQUEST_REASONING_LEVEL,
   ATTR_GEN_AI_RESPONSE_FINISH_REASONS,
   ATTR_GEN_AI_RESPONSE_STATUS,
@@ -31,12 +32,17 @@ import {
   ATTR_GEN_AI_USAGE_OUTPUT_TOKENS,
   ATTR_GEN_AI_USAGE_REASONING_OUTPUT_TOKENS,
   ENV_GENAI_CAPTURE_MESSAGE_CONTENT,
+  GEN_AI_PROVIDER_NAME_VALUE_OPENAI,
   METRIC_GEN_AI_CLIENT_INFERENCE_USAGE_CACHE_READ_INPUT_TOKENS,
   METRIC_GEN_AI_CLIENT_INFERENCE_USAGE_INPUT_TOKENS,
   METRIC_GEN_AI_CLIENT_INFERENCE_USAGE_OUTPUT_TOKENS,
   METRIC_GEN_AI_CLIENT_INFERENCE_USAGE_REASONING_OUTPUT_TOKENS,
 } from '@opentelemetry/genai-util';
 import { ATTR_ERROR_TYPE } from '@opentelemetry/semantic-conventions';
+import {
+  ATTR_GEN_AI_SYSTEM,
+  GEN_AI_SYSTEM_VALUE_OPENAI,
+} from '@opentelemetry/semantic-conventions/incubating';
 import { expect } from 'expect';
 import nock from 'nock';
 import { OpenAI } from 'openai';
@@ -117,6 +123,55 @@ describe('OpenAI genai-util integration', function () {
     expect(getTestSpans()).toHaveLength(0);
     await meterProvider.forceFlush();
     expect(metricExporter.getMetrics()).toHaveLength(0);
+  });
+
+  it('sets deprecated gen_ai.system alongside required gen_ai.provider.name on chat and embeddings', async () => {
+    nock('https://api.openai.com')
+      .post('/v1/chat/completions')
+      .reply(200, {
+        id: 'chatcmpl-system',
+        object: 'chat.completion',
+        created: 1700000000,
+        model: 'gpt-4o-mini-2024-07-18',
+        choices: [
+          {
+            index: 0,
+            finish_reason: 'stop',
+            message: { role: 'assistant', content: 'Hi' },
+            logprobs: null,
+          },
+        ],
+        usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
+      });
+
+    nock('https://api.openai.com')
+      .post('/v1/embeddings')
+      .reply(200, {
+        object: 'list',
+        model: 'text-embedding-3-small',
+        data: [{ object: 'embedding', index: 0, embedding: [0.1, 0.2] }],
+        usage: { prompt_tokens: 3, total_tokens: 3 },
+      });
+
+    await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+    await client.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: 'Hello',
+    });
+
+    const spans = getTestSpans();
+    expect(spans).toHaveLength(2);
+    for (const span of spans) {
+      expect(span.attributes[ATTR_GEN_AI_PROVIDER_NAME]).toBe(
+        GEN_AI_PROVIDER_NAME_VALUE_OPENAI
+      );
+      expect(span.attributes[ATTR_GEN_AI_SYSTEM]).toBe(
+        GEN_AI_SYSTEM_VALUE_OPENAI
+      );
+    }
   });
 
   it('records RateLimitError error.type on HTTP 429 without leaking raw status message', async () => {

@@ -75,6 +75,10 @@ import {
   ATTR_SERVER_ADDRESS,
   ATTR_SERVER_PORT,
 } from '@opentelemetry/semantic-conventions';
+import {
+  ATTR_GEN_AI_SYSTEM,
+  GEN_AI_SYSTEM_VALUE_OPENAI,
+} from '@opentelemetry/semantic-conventions/incubating';
 import { expect } from 'expect';
 import { type Definition, back as nockBack } from 'nock';
 import { OpenAI } from 'openai';
@@ -381,6 +385,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',
@@ -429,6 +434,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',
@@ -479,6 +485,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_CHOICE_COUNT]: 2,
@@ -543,6 +550,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',
@@ -594,6 +602,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans1[0], `chat ${model}`);
       expect(spans1[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',
@@ -638,6 +647,7 @@ describe('OpenAI', function () {
       expect(spans[0].status).toEqual({ code: SpanStatusCode.ERROR });
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'localhost',
@@ -682,6 +692,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',
@@ -743,6 +754,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_CHOICE_COUNT]: 2,
@@ -823,6 +835,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',
@@ -898,6 +911,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans1[0], `chat ${model}`);
       expect(spans1[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',
@@ -1010,6 +1024,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1054,6 +1069,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toMatchObject({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1116,6 +1132,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1167,6 +1184,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_CHOICE_COUNT]: 2,
@@ -1250,6 +1268,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1306,6 +1325,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans1[0], `chat ${model}`);
       expect(spans1[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1352,6 +1372,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1399,6 +1420,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1449,6 +1471,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1510,6 +1533,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_CHOICE_COUNT]: 2,
@@ -1609,6 +1633,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], `chat ${model}`);
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1689,6 +1714,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans1[0], `chat ${model}`);
       expect(spans1[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'chat',
         [ATTR_GEN_AI_REQUEST_MODEL]: model,
         [ATTR_GEN_AI_REQUEST_STREAM]: true,
@@ -1746,6 +1772,7 @@ describe('OpenAI', function () {
       assertSpanScope(spans[0], 'embeddings text-embedding-3-small');
       expect(spans[0].attributes).toEqual({
         [ATTR_GEN_AI_PROVIDER_NAME]: 'openai',
+        [ATTR_GEN_AI_SYSTEM]: GEN_AI_SYSTEM_VALUE_OPENAI,
         [ATTR_GEN_AI_OPERATION_NAME]: 'embeddings',
         [ATTR_GEN_AI_REQUEST_MODEL]: 'text-embedding-3-small',
         [ATTR_SERVER_ADDRESS]: 'api.openai.com',

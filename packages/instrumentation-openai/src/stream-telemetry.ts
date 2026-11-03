@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { diag, type DiagLogger } from '@opentelemetry/api';
-import type { InferenceInvocation } from '@opentelemetry/genai-util';
+import type { InferenceInvocation, TelemetryHandler } from '@opentelemetry/genai-util';
 import { getOpenAIErrorType } from './utils';
 
 export interface StreamTelemetryHooks<TChunk> {
@@ -14,122 +13,90 @@ export interface StreamTelemetryHooks<TChunk> {
 }
 
 /**
- * Main-compatible stand-in for genai-util `wrapAsyncStream` (#3831).
- * Records chunk timing and completes the invocation exactly once.
+ * Attach genai-util `TelemetryHandler.wrapAsyncStream` (#3831) to an OpenAI
+ * `Stream` (or any async iterable) while preserving OpenAI stream identity.
  *
- * Limitations (same class of risk as classic OpenAI instrumentation):
- * - If the wrapped iterator is never pulled, the invocation is not completed.
- * - Callers must iterate (or early-break / return / throw) for span end.
+ * OpenAI's `Stream` keeps the producer on the own-property `iterator` and
+ * `tee()` consumes via `this.iterator()` directly. `wrapAsyncStream` only
+ * replaces `[Symbol.asyncIterator]`, so a Symbol-only wrap would miss `tee()`.
+ * This helper feeds a producer proxy into `wrapAsyncStream`, then points both
+ * `stream.iterator` (when present) and `[Symbol.asyncIterator]` at the wrapped
+ * pull path — without recursion into the raw producer.
+ *
+ * Unconsumed streams: the invocation/span is created before the HTTP call
+ * (required for `withContext` nesting and TTFT from request start). Neither
+ * OpenAI's `Stream` nor `wrapAsyncStream` finalize when the object is merely
+ * dropped. Classic instrumentation-openai, #3831, and draft #9 all leave the
+ * span open until iteration/return/throw. This helper keeps that semantics —
+ * no timeouts or FinalizationRegistry.
  */
-export function wrapAsyncIteratorWithTelemetry<TChunk>(
-  iterator: AsyncIterator<TChunk>,
+export function attachOpenAIStreamTelemetry<TChunk>(
+  handler: TelemetryHandler,
+  stream: AsyncIterable<TChunk>,
   invocation: InferenceInvocation,
-  hooks: StreamTelemetryHooks<TChunk>,
-  diagLogger: DiagLogger = diag
-): AsyncIterableIterator<TChunk> {
-  let finalized = false;
-
-  const finalizeSuccess = async (): Promise<void> => {
-    if (finalized) {
-      return;
-    }
-    finalized = true;
-    try {
-      await hooks.onEnd?.();
-    } catch (err) {
-      diagLogger.error('Error in OpenAI stream onEnd hook', err);
-    } finally {
-      // If onEnd already failed the invocation (e.g. Responses stream error
-      // event), stop() is a no-op.
-      invocation.stop();
-    }
+  hooks: StreamTelemetryHooks<TChunk>
+): AsyncIterable<TChunk> {
+  const streamRecord = stream as AsyncIterable<TChunk> & {
+    iterator?: (...args: unknown[]) => AsyncIterator<TChunk>;
   };
 
-  const finalizeFailure = async (error: unknown): Promise<void> => {
-    if (finalized) {
-      return;
-    }
-    finalized = true;
-    try {
-      await hooks.onError?.(error);
-    } catch (err) {
-      diagLogger.error('Error in OpenAI stream onError hook', err);
-    } finally {
-      invocation.setFinishReasons(['error']);
+  const rawIterator =
+    typeof streamRecord.iterator === 'function'
+      ? streamRecord.iterator.bind(streamRecord)
+      : undefined;
+
+  const rawAsyncIterator =
+    typeof stream[Symbol.asyncIterator] === 'function'
+      ? stream[Symbol.asyncIterator].bind(stream)
+      : undefined;
+
+  const producer: AsyncIterable<TChunk> = {
+    [Symbol.asyncIterator](): AsyncIterator<TChunk> {
+      if (rawIterator) {
+        return rawIterator();
+      }
+      if (rawAsyncIterator) {
+        return rawAsyncIterator();
+      }
+      throw new TypeError('OpenAI stream is not async-iterable');
+    },
+  };
+
+  handler.wrapAsyncStream(producer, {
+    invocation,
+    onChunk: hooks.onChunk,
+    onEnd: hooks.onEnd,
+    onError: async error => {
+      // wrapAsyncStream's fail() path does not pass OpenAI-specific error.type;
+      // end the invocation here first so RateLimitError / APIError subclasses
+      // keep the same error.type as non-streaming paths. A subsequent fail()
+      // from wrapAsyncStream is a no-op.
       invocation.fail({
         exception: error instanceof Error ? error : undefined,
         errorType: getOpenAIErrorType(error),
       });
-    }
-  };
-
-  const originalNext = iterator.next.bind(iterator);
-  const originalReturn =
-    typeof iterator.return === 'function'
-      ? iterator.return.bind(iterator)
-      : undefined;
-  const originalThrow =
-    typeof iterator.throw === 'function'
-      ? iterator.throw.bind(iterator)
-      : undefined;
-
-  // Shared with next()/throw(): both can yield a chunk, complete, or reject.
-  const advance = async (
-    step: () => Promise<IteratorResult<TChunk>>
-  ): Promise<IteratorResult<TChunk>> => {
-    try {
-      const result = await step();
-      if (result.done) {
-        await finalizeSuccess();
-        return result;
-      }
-      try {
-        await hooks.onChunk?.(result.value);
-      } catch (err) {
-        diagLogger.error('Error in OpenAI stream onChunk hook', err);
-      }
-      invocation.recordStreamChunk();
-      return result;
-    } catch (error) {
-      await finalizeFailure(error);
-      throw error;
-    }
-  };
-
-  return {
-    async next(...args): Promise<IteratorResult<TChunk>> {
-      return advance(() => originalNext(...args));
+      await hooks.onError?.(error);
     },
+  });
 
-    async return(value?: unknown): Promise<IteratorResult<TChunk>> {
-      try {
-        const result: IteratorResult<TChunk> = originalReturn
-          ? await originalReturn(value)
-          : { done: true, value: value as TChunk };
-        await finalizeSuccess();
-        return result;
-      } catch (error) {
-        await finalizeFailure(error);
-        throw error;
-      }
-    },
+  const pullWrapped = (): AsyncIterableIterator<TChunk> =>
+    producer[Symbol.asyncIterator]() as AsyncIterableIterator<TChunk>;
 
-    async throw(error?: unknown): Promise<IteratorResult<TChunk>> {
-      if (originalThrow) {
-        return advance(() => originalThrow(error));
-      }
-      try {
-        if (originalReturn) {
-          await originalReturn();
-        }
-      } finally {
-        await finalizeFailure(error);
-      }
-      throw error;
-    },
+  if (rawIterator) {
+    Object.defineProperty(stream, 'iterator', {
+      configurable: true,
+      enumerable: false,
+      writable: true,
+      value: pullWrapped,
+    });
+  }
 
-    [Symbol.asyncIterator]() {
-      return this;
-    },
-  };
+  Object.defineProperty(stream, Symbol.asyncIterator, {
+    configurable: true,
+    enumerable: false,
+    writable: true,
+    value: pullWrapped,
+  });
+
+  return stream;
 }
